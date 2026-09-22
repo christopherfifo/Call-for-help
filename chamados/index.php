@@ -50,7 +50,14 @@ $sql = "
     JOIN categorias cat ON c.categoria_id = cat.id
     $whereClause
     ORDER BY 
-        CASE c.urgencia WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
+        -- Urgência efetiva: maior entre original e a intervenção ativa de maior hierarquia
+        CASE COALESCE(
+            (SELECT uc.urgencia FROM urgencia_chamados uc
+             WHERE uc.chamado_id = c.id AND uc.ativo = 1
+             ORDER BY uc.hierarquia DESC, FIELD(uc.urgencia,'ALTA','MODERADA','LEVE') ASC LIMIT 1),
+            c.urgencia
+        )
+        WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
         c.criado_em ASC
 ";
 
@@ -60,14 +67,7 @@ $chamados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once __DIR__ . '/../includes/header.php';
 
-function getBadgeUrgencia($urgencia) {
-    switch ($urgencia) {
-        case 'ALTA': return '<span class="badge bg-danger">Alta</span>';
-        case 'MODERADA': return '<span class="badge bg-warning text-dark">Moderada</span>';
-        case 'LEVE': return '<span class="badge bg-success">Leve</span>';
-        default: return '<span class="badge bg-secondary">Indefinido</span>';
-    }
-}
+// badgeUrgencia() é global via config/helpers.php
 
 function getBadgeStatus($status) {
     switch ($status) {
@@ -155,7 +155,9 @@ function getBadgeStatus($status) {
                         elseif ($diferenca < 86400) return '<span class="badge bg-warning text-dark" title="Próximo do Vencimento">🟡 Próximo</span>';
                         else return '<span class="badge bg-success" title="No Prazo">🟢 No Prazo</span>';
                     }
-                    foreach ($chamados as $c): 
+                    foreach ($chamados as $c):
+                        $urg_efetiva  = getUrgenciaEfetiva($pdo, $c);
+                        $urg_override = ($urg_efetiva !== $c['urgencia']);
                     ?>
                     <tr>
                         <td class="fw-bold"><?= htmlspecialchars($c['numero']) ?> <?= (isset($c['tipo']) && $c['tipo'] === 'INFORMAL') ? '<span class="badge bg-info text-dark">Informal</span>' : '' ?></td>
@@ -163,7 +165,14 @@ function getBadgeStatus($status) {
                         <td><?= htmlspecialchars($c['solicitante']) ?></td>
                         <td><?= htmlspecialchars($c['categoria']) ?></td>
                         <td><?= htmlspecialchars($c['tecnico'] ?? 'Não atribuído') ?></td>
-                        <td><?= getBadgeUrgencia($c['urgencia']) ?></td>
+                        <td>
+                            <?= badgeUrgencia($urg_efetiva, true) ?>
+                            <?php if ($urg_override): ?>
+                                <span class="badge bg-warning text-dark ms-1" title="Original: <?= $c['urgencia'] ?>">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php if ($c['tag_repassado']): ?>
                                 <span class="badge bg-secondary me-1" title="Repassado">Rep.</span>

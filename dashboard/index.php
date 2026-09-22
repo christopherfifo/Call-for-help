@@ -20,14 +20,7 @@ function getBadgeStatus($status) {
     }
 }
 
-function getBadgeUrgencia($urgencia) {
-    switch ($urgencia) {
-        case 'ALTA': return '<span class="badge bg-danger">Alta</span>';
-        case 'MODERADA': return '<span class="badge bg-warning text-dark">Moderada</span>';
-        case 'LEVE': return '<span class="badge bg-success">Leve</span>';
-        default: return '<span class="badge bg-secondary">Indefinido</span>';
-    }
-}
+// badgeUrgencia() é global via config/helpers.php
 
 function checkPrazo($chamado) {
     if ($chamado['prazo_indeterminado'] || !$chamado['prazo'] || in_array($chamado['status'], ['FINALIZADO', 'CANCELADO'])) {
@@ -94,7 +87,7 @@ if ($cargo === 'USUARIO') {
         FROM chamados 
         WHERE (tecnico_id = ? OR tecnico_id IS NULL) AND status NOT IN ('FINALIZADO', 'CANCELADO')
         ORDER BY 
-            CASE urgencia WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
+            CASE COALESCE((SELECT uc.urgencia FROM urgencia_chamados uc WHERE uc.chamado_id = id AND uc.ativo = 1 ORDER BY uc.hierarquia DESC, FIELD(uc.urgencia,'ALTA','MODERADA','LEVE') ASC LIMIT 1), urgencia) WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
             prazo ASC, 
             criado_em ASC
         LIMIT 10
@@ -130,7 +123,7 @@ if ($cargo === 'USUARIO') {
         FROM chamados 
         WHERE status NOT IN ('FINALIZADO', 'CANCELADO')
         ORDER BY 
-            CASE urgencia WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
+            CASE COALESCE((SELECT uc.urgencia FROM urgencia_chamados uc WHERE uc.chamado_id = id AND uc.ativo = 1 ORDER BY uc.hierarquia DESC, FIELD(uc.urgencia,'ALTA','MODERADA','LEVE') ASC LIMIT 1), urgencia) WHEN 'ALTA' THEN 1 WHEN 'MODERADA' THEN 2 WHEN 'LEVE' THEN 3 END ASC,
             prazo ASC,
             criado_em ASC
         LIMIT 10
@@ -194,7 +187,7 @@ require_once __DIR__ . '/../includes/header.php';
                             <tr>
                                 <td><?= htmlspecialchars($c['numero']) ?> <?= (isset($c['tipo']) && $c['tipo'] === 'INFORMAL') ? '<span class="badge bg-info text-dark">Informal</span>' : '' ?></td>
                                 <td><?= htmlspecialchars($c['assunto']) ?></td>
-                                <td><?= getBadgeUrgencia($c['urgencia']) ?></td>
+                                <td><?= badgeUrgencia(getUrgenciaEfetiva($pdo, $c), true) ?></td>
                                 <td><?= getBadgeStatus($c['status']) ?></td>
                                 <td><?= checkPrazo($c) ?></td>
                                 <td><?= date('d/m/Y H:i', strtotime($c['criado_em'])) ?></td>
@@ -233,7 +226,7 @@ require_once __DIR__ . '/../includes/header.php';
                             <tr>
                                 <td><a href="/chamados/ver.php?id=<?= $c['id'] ?>" class="fw-bold text-decoration-none"><?= htmlspecialchars($c['numero']) ?></a> <?= (isset($c['tipo']) && $c['tipo'] === 'INFORMAL') ? '<span class="badge bg-info text-dark">Informal</span>' : '' ?></td>
                                 <td><?= htmlspecialchars($c['assunto']) ?></td>
-                                <td><?= getBadgeUrgencia($c['urgencia']) ?></td>
+                                <td><?= badgeUrgencia(getUrgenciaEfetiva($pdo, $c), true) ?></td>
                                 <td><?= getBadgeStatus($c['status']) ?></td>
                                 <td><?= checkPrazo($c) ?></td>
                                 <td><?= date('d/m/Y H:i', strtotime($c['criado_em'])) ?></td>
@@ -274,7 +267,7 @@ require_once __DIR__ . '/../includes/header.php';
                             <tr>
                                 <td><a href="/chamados/ver.php?id=<?= $c['id'] ?>" class="fw-bold text-decoration-none"><?= htmlspecialchars($c['numero']) ?></a> <span class="badge bg-info text-dark">Informal</span></td>
                                 <td><?= htmlspecialchars($c['assunto']) ?></td>
-                                <td><?= getBadgeUrgencia($c['urgencia']) ?></td>
+                                <td><?= badgeUrgencia(getUrgenciaEfetiva($pdo, $c), true) ?></td>
                                 <td><?= getBadgeStatus($c['status']) ?></td>
                                 <td><?= checkPrazo($c) ?></td>
                                 <td><?= date('d/m/Y H:i', strtotime($c['criado_em'])) ?></td>

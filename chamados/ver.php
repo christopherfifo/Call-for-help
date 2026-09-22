@@ -58,6 +58,19 @@ $stmt = $pdo->prepare("
 $stmt->execute([$id]);
 $anexos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// ── Urgência efetiva e histórico de intervenções ──────────────────────────
+$urgencia_efetiva   = getUrgenciaEfetiva($pdo, $chamado);
+$urgencia_sobrescrita = ($urgencia_efetiva !== $chamado['urgencia']);
+$historico_urgencia = getUrgenciaHistorico($pdo, $id);
+
+// Intervenção ativa do usuário logado (para o botão de ação)
+$stmt = $pdo->prepare("
+    SELECT id, urgencia FROM urgencia_chamados
+    WHERE chamado_id = ? AND usuario_id = ? AND ativo = 1
+");
+$stmt->execute([$id, $_SESSION['usuario_id']]);
+$minha_intervencao = $stmt->fetch(PDO::FETCH_ASSOC);
+
 require_once __DIR__ . '/../includes/header.php';
 
 function badgeStatus($status) {
@@ -232,7 +245,21 @@ function badgeStatus($status) {
                     <li class="mb-2"><strong>Solicitante:</strong> <?= htmlspecialchars($chamado['solicitante']) ?></li>
                     <li class="mb-2"><strong>Categoria:</strong> <?= htmlspecialchars($chamado['categoria']) ?></li>
                     <li class="mb-2"><strong>Técnico:</strong> <?= htmlspecialchars($chamado['tecnico'] ?? 'Não atribuído') ?></li>
-                    <li class="mb-2"><strong>Urgência:</strong> <?= htmlspecialchars($chamado['urgencia']) ?></li>
+                    <li class="mb-2">
+                        <strong>Urgência:</strong>
+                        <?= badgeUrgencia($urgencia_efetiva) ?>
+                        <?php if ($urgencia_sobrescrita): ?>
+                            <span class="badge bg-warning text-dark ms-1" title="Urgência original: <?= htmlspecialchars($chamado['urgencia']) ?>">
+                                <i class="bi bi-exclamation-triangle"></i> Sobrescrita
+                            </span>
+                        <?php endif; ?>
+                    </li>
+                    <?php if ($urgencia_sobrescrita): ?>
+                    <li class="mb-2">
+                        <strong>Urgência original (usuário):</strong>
+                        <?= badgeUrgencia($chamado['urgencia'], true) ?>
+                    </li>
+                    <?php endif; ?>
                     <li class="mb-2"><strong>Justificativa (Urgência):</strong><br><small class="text-muted"><?= htmlspecialchars($chamado['justificativa_urgencia']) ?></small></li>
                     <li class="mb-2"><strong>Abertura:</strong> <?= date('d/m/Y H:i', strtotime($chamado['criado_em'])) ?></li>
                     <?php if ($chamado['prazo']): ?>
@@ -304,10 +331,21 @@ function badgeStatus($status) {
                     <?php endif; ?>
 
                     <?php 
-                    // Regra de Alterar Urgência: Somente Admin/DEV, em chamados não finalizados/cancelados
-                    if (!in_array($chamado['status'], ['FINALIZADO', 'CANCELADO']) && in_array($_SESSION['usuario_cargo'], ['ADMINISTRADOR', 'DEV'])): 
+                    // Técnico, Admin e DEV podem intervir na urgência
+                    if (!in_array($chamado['status'], ['FINALIZADO', 'CANCELADO'])
+                        && in_array($_SESSION['usuario_cargo'], ['TECNICO', 'ADMINISTRADOR', 'DEV'])): 
                     ?>
-                        <a href="/chamados/urgencia.php?id=<?= $id ?>" class="btn btn-info text-white mt-2"><i class="bi bi-exclamation-triangle"></i> Alterar Urgência</a>
+                        <a href="/chamados/urgencia.php?id=<?= $id ?>" class="btn btn-info text-white mt-2">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <?= $minha_intervencao ? 'Editar minha urgência' : 'Intervir na Urgência' ?>
+                        </a>
+                        <?php if ($minha_intervencao): ?>
+                            <a href="/chamados/urgencia.php?id=<?= $id ?>&revogar=1"
+                               class="btn btn-outline-danger mt-2"
+                               onclick="return confirm('Revogar sua intervenção de urgência?')">
+                                <i class="bi bi-x-circle"></i> Revogar urgência
+                            </a>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <button type="button" class="btn btn-dark mt-2" data-bs-toggle="modal" data-bs-target="#modalSolicitarRelatorio">
@@ -378,5 +416,51 @@ function badgeStatus($status) {
     </div>
   </div>
 </div>
+
+<?php if ($historico_urgencia): ?>
+<!-- Histórico de intervenções de urgência -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0 border-warning">
+            <div class="card-header bg-warning bg-opacity-10 fw-bold py-3">
+                <i class="bi bi-exclamation-triangle text-warning"></i> Intervenções de Urgência
+                <span class="badge bg-secondary ms-2"><?= count($historico_urgencia) ?></span>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Autor</th>
+                            <th>Perfil</th>
+                            <th>Urgência</th>
+                            <th>Status</th>
+                            <th>Justificativa</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($historico_urgencia as $h): ?>
+                        <tr class="<?= $h['ativo'] ? '' : 'text-muted text-decoration-line-through' ?>">
+                            <td><?= htmlspecialchars($h['autor_nome']) ?></td>
+                            <td><span class="badge bg-secondary"><?= htmlspecialchars($h['cargo_autor']) ?></span></td>
+                            <td><?= badgeUrgencia($h['urgencia'], true) ?></td>
+                            <td>
+                                <?= $h['ativo']
+                                    ? '<span class="badge bg-success">Ativa</span>'
+                                    : '<span class="badge bg-secondary">Revogada</span>' ?>
+                            </td>
+                            <td class="text-wrap" style="max-width:300px;">
+                                <?= htmlspecialchars($h['justificativa']) ?>
+                            </td>
+                            <td><small><?= date('d/m/Y H:i', strtotime($h['criado_em'])) ?></small></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
