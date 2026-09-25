@@ -13,11 +13,14 @@ if (isset($_SESSION['usuario_id'])) {
 
 $erro = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+checkRateLimit("login", 5, 300); // máx 5 tentativas/5min por IP
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $matricula = $_POST['matricula'] ?? '';
     $senha = $_POST['senha'] ?? '';
 
     if (login($matricula, $senha)) {
+        resetRateLimit("login");
         if ($_SESSION['primeiro_acesso']) {
             redirect('/auth/primeiro_acesso.php');
         } else {

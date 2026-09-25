@@ -29,6 +29,9 @@ define('DB_PASS', getenv('DB_PASS') ?: '123456');
 // Helpers globais (funções reutilizáveis: urgência, badges, etc.)
 require_once __DIR__ . '/helpers.php';
 
+// Rate limiting
+require_once __DIR__ . '/rate_limit.php';
+
 if (!function_exists('redirect')) {
     function redirect($url) {
         header("Location: $url");

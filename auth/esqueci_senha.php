@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+checkRateLimit("reset_senha", 3, 900); // máx 3 pedidos/15min por IP
 
 $erro = '';
 $sucesso = '';

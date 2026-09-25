@@ -26,14 +26,19 @@ if (!$chamado) {
     redirect('/chamados/');
 }
 
-// Controle de acesso detalhado (Usuário só vê o seu, Técnico vê o que está na fila ou com ele, Admin/DEV vê tudo)
+// Controle de acesso: Usuário só vê o seu; Técnico vê o atribuído a ele OU na fila (tecnico_id NULL); Admin/DEV vê tudo.
 $cargo = $_SESSION['usuario_cargo'];
+
 if ($cargo === 'USUARIO' && $chamado['usuario_id'] != $_SESSION['usuario_id']) {
     die("Você não tem permissão para visualizar este chamado.");
 }
-if ($cargo === 'TECNICO' && $chamado['tecnico_id'] != null && $chamado['tecnico_id'] != $_SESSION['usuario_id']) {
-    // Pode haver regras mais complexas depois para técnicos repassarem, mas a princípio ele só vê o dele ou da fila.
-    die("Você não tem permissão para visualizar este chamado.");
+
+if ($cargo === 'TECNICO') {
+    $eh_da_fila      = ($chamado['tecnico_id'] === null);
+    $eh_atribuido    = ($chamado['tecnico_id'] == $_SESSION['usuario_id']);
+    if (!$eh_da_fila && !$eh_atribuido) {
+        die("Você não tem permissão para visualizar este chamado.");
+    }
 }
 
 // Busca o histórico (Timeline)

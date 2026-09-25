@@ -213,3 +213,17 @@ INSERT IGNORE INTO categorias (nome) VALUES
     ('Impressora'), ('Acesso'), ('E-mail'), ('Telefonia'),
     ('Equipamento'), ('Outro');
 
+-- ─────────────────────────────────────────
+-- Tabela de Rate Limit (por IP + ação)
+-- ─────────────────────────────────────────
+-- Armazena tentativas por IP independente de sessão/cookie.
+-- bloqueado_ate NULL = livre; timestamp futuro = bloqueado até ali.
+CREATE TABLE IF NOT EXISTS rate_limit (
+    ip            VARCHAR(45) NOT NULL,
+    acao          VARCHAR(50) NOT NULL,
+    tentativas    INT         NOT NULL DEFAULT 1,
+    primeira_em   DATETIME    NOT NULL,
+    ultima_em     DATETIME    NOT NULL,
+    bloqueado_ate DATETIME    DEFAULT NULL,
+    PRIMARY KEY (ip, acao)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
